@@ -1,4 +1,39 @@
-# OpenRussian MCP
+<p align="center">
+  <a href="https://en.openrussian.org/">
+    <img src="https://en.openrussian.org/img/polandball-russia.png" alt="OpenRussian logo" width="160">
+  </a>
+</p>
+
+# Unofficial OpenRussian MCP
+
+> **Unofficial community project.** The dictionary, its data and its logo
+> belong to [OpenRussian.org](https://en.openrussian.org/). I am **not** part
+> of the OpenRussian team or board in any way. I am an Italian guy who studies/speaks 
+> Russian and built this tool for other students who use AI assistants and find 
+> that AI often gets Russian grammar wrong (stress, cases, aspect, verb government). 
+> Giving the assistant a real dictionary to check, fixes a lot of that (but spends more tokens).
+
+## Support OpenRussian
+
+This project exists only because of the work of the OpenRussian volunteers.
+If it is useful to you, please support the original:
+
+- Visit and use the dictionary: <https://en.openrussian.org/>
+- Send feedback or corrections to the team via the
+  [contact page](https://en.openrussian.org/contact).
+- Consider a [Pro Account](https://en.openrussian.org/pro-account), if it
+  suits you, to support the site.
+- Learn more on the [About page](https://en.openrussian.org/about) and the
+  [data page](https://en.openrussian.org/dictionary-data).
+
+## Contribute to this MCP
+
+Bug reports and pull requests to this MCP server are welcome: better lookups,
+new tools, tests, docs, or support for more MCP clients. See
+[Development](#development) for how to run the checks, then open a PR at
+<https://github.com/nicolacalzone/mcp-openrussian>.
+
+## About
 
 A local, read-only dictionary server for MCP clients. It serves an OpenRussian
 CSV snapshot through SQLite. The data is kept separate from the Python package.
@@ -216,8 +251,6 @@ dictionary; only the monthly workflow downloads data. The September 2026 full
 export builds into a roughly 730 MiB SQLite file in about one and a half
 minutes.
 Build duration and size will vary by machine and export.
-
-The implementation design and release gates are in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## Data rights
 
