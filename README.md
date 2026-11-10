@@ -25,21 +25,31 @@ python -m venv .venv
 
 On macOS/Linux, use `.venv/bin/python` in place of `.venv/Scripts/python`.
 
+The examples below call `openrussian-data` directly. Either activate the
+virtual environment first, or prefix each command with `uv run --locked`.
+
 ## First dataset build
 
 If your repository already has a monthly release, skip to
 [Monthly refresh](#monthly-refresh) and run `openrussian-data pull`. Otherwise,
 build from CSVs you download yourself.
 
-Download the current CSV tables from the TogetherDB link on
-[OpenRussian's data page](https://en.openrussian.org/dictionary-data). Keep the
-original filenames. This server needs the 13 tables listed in
-`src/openrussian_mcp/sources/contract.py`; `scenarios.csv` is optional and not
-ingested. Place the exports in a local directory, then run:
+Download the CSV tables into a directory of your own (not inside `data/`):
 
 ```text
-openrussian-data inspect --input . --date 2026-09-21
-openrussian-data snapshot --input . --date 2026-09-21
+openrussian-data download --output raw
+```
+
+This fetches all 14 tables from TogetherDB under their original filenames.
+Alternatively, export them by hand from the TogetherDB link on
+[OpenRussian's data page](https://en.openrussian.org/dictionary-data) and keep
+the original filenames. This server needs the 13 tables listed in
+`src/openrussian_mcp/sources/contract.py`; `scenarios.csv` is optional and not
+ingested. Then run, using the directory that holds the CSVs as `--input`:
+
+```text
+openrussian-data inspect --input raw --date 2026-09-21
+openrussian-data snapshot --input raw --date 2026-09-21
 openrussian-data build --snapshot 2026-09-21
 openrussian-data validate --build 2026-09-21
 openrussian-data activate --build 2026-09-21
@@ -48,7 +58,7 @@ openrussian-data analyze "Я вчера ходил в магазин"
 ```
 
 Replace the date with the date of your export. `openrussian-data refresh
---input DIRECTORY --date YYYY-MM-DD` combines snapshot, build, validation,
+--input raw --date YYYY-MM-DD` combines snapshot, build, validation,
 and activation. Validation failures leave the active database unchanged.
 The snapshot command rejects an already-used date; use the actual date of
 each new export and do not edit a snapshot in place. A build directory is
@@ -63,8 +73,11 @@ openrussian-data activate --build 2026-09-21-v2
 Version 0.2 uses database schema 2. Databases built by 0.1 are rejected with a
 message asking for a rebuild.
 
-The default data directory is `./data`. Set `OPENRUSSIAN_DATA_DIR` to an
-absolute path if you launch the MCP server from another working directory.
+The default data directory is `./data`, relative to the directory you run the
+command from. For the CLI, pass `--data-dir PATH` before the subcommand
+(`openrussian-data --data-dir work refresh ...`). For the MCP server, set
+`OPENRUSSIAN_DATA_DIR` to an absolute path, since it may be launched from
+another working directory.
 The active pointer (`data/active/manifest.json`) stores the database path
 relative to the data directory, so the whole directory can be moved, or shared
 between Windows and WSL, without reactivating.
@@ -95,10 +108,10 @@ object, substitute your absolute paths in this example:
 
 ```json
 {
-  "command": "C:\\path\\to\\MCP_open_russian\\.venv\\Scripts\\openrussian-mcp.exe",
+  "command": "C:\\path\\to\\russian-mcp\\.venv\\Scripts\\openrussian-mcp.exe",
   "args": [],
   "env": {
-    "OPENRUSSIAN_DATA_DIR": "C:\\path\\to\\MCP_open_russian\\data"
+    "OPENRUSSIAN_DATA_DIR": "C:\\path\\to\\russian-mcp\\data"
   }
 }
 ```

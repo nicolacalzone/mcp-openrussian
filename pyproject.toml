@@ -39,5 +39,5 @@ select = ["E", "F", "I", "B", "UP"]
 python_version = "3.12"
 packages = ["openrussian_mcp"]
 explicit_package_bases = true
-mypy_path = "src"
+mypy_path = ["src", "tests"]
 check_untyped_defs = true
