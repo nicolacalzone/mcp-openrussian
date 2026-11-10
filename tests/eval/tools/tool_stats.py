@@ -12,7 +12,9 @@ from collections import defaultdict
 
 def main() -> None:
     calls: dict[str, str] = {}
-    stats = defaultdict(lambda: {"calls": 0, "empty": 0, "errors": 0, "result_chars": 0})
+    stats: defaultdict[str, dict[str, int]] = defaultdict(
+        lambda: {"calls": 0, "empty": 0, "errors": 0, "result_chars": 0}
+    )
     for line in open(sys.argv[1], encoding="utf-8"):
         content = json.loads(line).get("message", {}).get("content")
         if not isinstance(content, list):
