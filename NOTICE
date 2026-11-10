@@ -1,0 +1,14 @@
+The code in this repository is MIT licensed. OpenRussian dictionary data is
+provided separately by OpenRussian.org under CC BY-SA 4.0:
+https://en.openrussian.org/dictionary-data
+https://creativecommons.org/licenses/by-sa/4.0/
+
+Example sentence text comes from Tatoeba. Tatoeba describes its textual data
+licence as CC BY 2.0 FR: https://tatoeba.org and
+https://creativecommons.org/licenses/by/2.0/fr/
+
+The server transforms source CSV exports into indexed SQLite files; manifests
+record the source export date and transformation version. The application is
+independent of and not endorsed by OpenRussian.org or TogetherDB. Audio files
+are not included or downloaded.
+

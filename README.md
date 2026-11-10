@@ -1,8 +1,11 @@
 # OpenRussian MCP
 
-A local, read-only dictionary server for MCP clients. It serves a manually
-downloaded OpenRussian CSV snapshot through SQLite. The data export is kept
-separate from the Python package.
+A local, read-only dictionary server for MCP clients. It serves an OpenRussian
+CSV snapshot through SQLite. The data is kept separate from the Python package.
+A monthly GitHub Actions job publishes fresh CSVs, and `openrussian-data pull`
+turns the latest release into the local database (see
+[Monthly refresh](#monthly-refresh)). You can also build from CSVs you
+download yourself.
 
 ## Install
 
@@ -23,6 +26,10 @@ python -m venv .venv
 On macOS/Linux, use `.venv/bin/python` in place of `.venv/Scripts/python`.
 
 ## First dataset build
+
+If your repository already has a monthly release, skip to
+[Monthly refresh](#monthly-refresh) and run `openrussian-data pull`. Otherwise,
+build from CSVs you download yourself.
 
 Download the current CSV tables from the TogetherDB link on
 [OpenRussian's data page](https://en.openrussian.org/dictionary-data). Keep the
@@ -103,12 +110,81 @@ external references only.
 
 ## Monthly refresh
 
-Download a new complete set of CSVs manually and run `refresh` with a new
-date. Restart your MCP client after activating the new build. There is no
-automatic TogetherDB extraction. A future acquisition provider can produce
-the same raw snapshot without changing the builder or server.
+### 1. Publish (GitHub)
 
-To roll back, run `openrussian-data activate --build OLD_DATE` against a
+[openrussian-monthly.yml](.github/workflows/openrussian-monthly.yml) runs on the
+1st of each month at 03:17 UTC, and on demand from the Actions tab
+(`workflow_dispatch`). It:
+
+1. downloads all 14 tables from TogetherDB (`openrussian-data download`);
+2. runs a full snapshot, build and validation on the result, and stops if it fails;
+3. publishes `openrussian-csv.zip` and `openrussian-csv.zip.sha256` as a release
+   tagged `dump-YYYY-MM-DD`.
+
+To set it up, push this repository to GitHub. The workflow uses the built-in
+`GITHUB_TOKEN`, so no secrets are needed. GitHub disables scheduled workflows
+after 60 days without repository activity; `pull` warns when the latest release
+is more than 40 days old. The download uses TogetherDB's undocumented export
+API, which may change without notice. If the workflow starts failing, check the
+Actions log, or fall back to a manual `refresh`.
+
+### 2. Pull (your machine)
+
+```text
+export OPENRUSSIAN_RELEASE_REPO=you/russian-mcp   # PowerShell: $env:OPENRUSSIAN_RELEASE_REPO="..."
+export GITHUB_TOKEN=...                           # only for a private repository
+openrussian-data pull
+```
+
+`pull` reads the latest release, downloads the zip, checks its SHA-256, and
+accepts only the expected CSV names. It then runs the usual snapshot, build,
+validate and activate steps and prints the new build ID. Restart your MCP
+client afterwards; the server picks the database at startup and never uses the
+network itself.
+
+- Running `pull` again reports `up to date` when the active dataset is the same
+  or newer than the latest release.
+- `--force` rebuilds from the stored snapshot under a new build ID
+  (`DATE-v2`, ...) and activates it.
+- `--repo OWNER/NAME` overrides `OPENRUSSIAN_RELEASE_REPO`.
+- Snapshots from `pull` record `togetherdb_export_github_release` as their
+  acquisition method.
+
+### 3. Pruning
+
+After each `pull`, old data is deleted. `--keep N` (default 2) keeps the active
+build plus the newest other validated builds, up to N in total. It also removes
+failed or incomplete builds and snapshots no kept build uses. It never deletes
+the active build or `data/verified_builds/`.
+
+```text
+openrussian-data prune --dry-run     # preview
+openrussian-data prune --keep 3
+```
+
+Because of pruning, you can only roll back to a kept build. A running server
+keeps working during a `pull` because its database is the previous build, which
+is kept.
+
+### 4. Schedule (optional, Linux or WSL)
+
+Edit the paths and repository in [deploy/systemd](deploy/systemd), then:
+
+```text
+mkdir -p ~/.config/systemd/user
+cp deploy/systemd/openrussian-pull.* ~/.config/systemd/user/
+systemctl --user enable --now openrussian-pull.timer
+```
+
+The timer runs on the 2nd of each month at 07:00, and `Persistent=true` runs a
+missed pull the next time the machine starts. For a private repository, follow the
+comment in the service file to add an `EnvironmentFile` containing `GITHUB_TOKEN=...`.
+
+### Manual refresh and rollback
+
+Refreshing from CSVs you exported yourself still works with `refresh`.
+
+To roll back, run `openrussian-data activate --build OLD_ID` against a
 previously validated build, then restart the client. Do not remove that
 build while a server process is using it.
 
@@ -122,7 +198,8 @@ uv run --locked mypy src tests
 ```
 
 Code CI runs these checks against tiny synthetic CSV fixtures on Windows and
-Linux; it does not fetch or refresh dictionary data. The September 2026 full
+Linux. Tests mock all HTTP, so CI never touches the network or the real
+dictionary; only the monthly workflow downloads data. The September 2026 full
 export builds into a roughly 730 MiB SQLite file in about one and a half
 minutes.
 Build duration and size will vary by machine and export.
@@ -133,4 +210,6 @@ The implementation design and release gates are in [IMPLEMENTATION_PLAN.md](IMPL
 
 Source data is from OpenRussian.org under CC BY-SA 4.0. Example sentences are
 from Tatoeba under CC BY 2.0 FR. See [NOTICE](NOTICE). This application does
-not download or distribute audio files.
+not download or distribute audio files. The monthly release redistributes the
+CSV tables with attribution, which CC BY-SA allows; if the repository is public,
+so is the zip.

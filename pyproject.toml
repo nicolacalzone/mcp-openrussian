@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openrussian-mcp"
+version = "0.2.0"
+description = "Read-only OpenRussian dictionary MCP server"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = ["mcp>=2,<3"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.12,<1", "mypy>=1.17,<2"]
+
+[project.scripts]
+openrussian-data = "openrussian_mcp.cli:main"
+openrussian-mcp = "openrussian_mcp.mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/openrussian_mcp"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/README.md", "/LICENSE", "/NOTICE", "/pyproject.toml", "/uv.lock"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["openrussian_mcp"]
+explicit_package_bases = true
+mypy_path = "src"
+check_untyped_defs = true

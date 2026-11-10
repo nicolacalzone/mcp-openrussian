@@ -1,0 +1,11 @@
+[Unit]
+Description=Pull the latest OpenRussian dictionary release and rebuild the local database
+
+[Service]
+Type=oneshot
+# Adjust the paths and repository to your setup.
+WorkingDirectory=%h/sviluppo/russian-mcp
+Environment=OPENRUSSIAN_DATA_DIR=%h/sviluppo/russian-mcp/data
+Environment=OPENRUSSIAN_RELEASE_REPO=OWNER/russian-mcp
+# For a private repository, add: EnvironmentFile=%h/.config/openrussian-pull.env (GITHUB_TOKEN=...)
+ExecStart=%h/sviluppo/russian-mcp/.venv/bin/openrussian-data pull

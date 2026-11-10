@@ -1,0 +1,53 @@
+# Monthly: download the OpenRussian tables from TogetherDB, prove they build into a valid
+# database, then publish the CSVs as a GitHub Release for `openrussian-data pull`.
+# Note: GitHub disables scheduled workflows after 60 days without repository activity.
+name: OpenRussian monthly dump
+
+on:
+  schedule:
+    - cron: "17 3 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install locked package
+        run: |
+          python -m pip install uv==0.12.18
+          uv sync --locked
+      - name: Set release date
+        run: echo "DATE=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+      - name: Download all tables
+        run: uv run --locked openrussian-data download --output raw
+      - name: Validation gate (snapshot, build and validate)
+        run: uv run --locked openrussian-data --data-dir work refresh --input raw --date "$DATE"
+      - name: Package
+        run: |
+          mkdir pkg
+          cp raw/*.csv NOTICE pkg/
+          (cd pkg && zip -q ../openrussian-csv.zip ./*)
+          sha256sum openrussian-csv.zip > openrussian-csv.zip.sha256
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<NOTES
+          Monthly CSV export of the OpenRussian public database ($DATE).
+
+          - Dictionary data: OpenRussian.org, CC BY-SA 4.0 (https://en.openrussian.org/dictionary-data)
+          - Example sentences: Tatoeba, CC BY 2.0 FR (https://tatoeba.org)
+
+          This export built and validated successfully before publication.
+          Fetch it locally with \`openrussian-data pull\`.
+          NOTES
+          gh release create "dump-$DATE" openrussian-csv.zip openrussian-csv.zip.sha256 \
+            --title "OpenRussian dump-$DATE" --notes-file notes.md --latest

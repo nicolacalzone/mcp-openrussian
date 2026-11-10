@@ -1,0 +1,9 @@
+[Unit]
+Description=Monthly OpenRussian dictionary pull
+
+[Timer]
+OnCalendar=*-*-02 07:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

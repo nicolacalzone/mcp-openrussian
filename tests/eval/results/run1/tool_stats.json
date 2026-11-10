@@ -1,0 +1,38 @@
+{
+ "analyze_text": {
+  "calls": 12,
+  "empty": 0,
+  "errors": 0,
+  "result_chars": 33779
+ },
+ "get_entry": {
+  "calls": 3,
+  "empty": 0,
+  "errors": 0,
+  "result_chars": 4291
+ },
+ "lookup_entries": {
+  "calls": 90,
+  "empty": 2,
+  "errors": 0,
+  "result_chars": 131917
+ },
+ "search_entries": {
+  "calls": 20,
+  "empty": 2,
+  "errors": 0,
+  "result_chars": 41512
+ },
+ "browse_entries": {
+  "calls": 6,
+  "empty": 0,
+  "errors": 0,
+  "result_chars": 75060
+ },
+ "find_examples": {
+  "calls": 8,
+  "empty": 0,
+  "errors": 0,
+  "result_chars": 7712
+ }
+}

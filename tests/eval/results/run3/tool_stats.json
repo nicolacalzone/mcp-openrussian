@@ -1,0 +1,32 @@
+{
+ "analyze_text": {
+  "calls": 19,
+  "empty": 0,
+  "errors": 0,
+  "result_chars": 29612
+ },
+ "lookup_entries": {
+  "calls": 98,
+  "empty": 1,
+  "errors": 0,
+  "result_chars": 122455
+ },
+ "search_entries": {
+  "calls": 13,
+  "empty": 0,
+  "errors": 0,
+  "result_chars": 28543
+ },
+ "browse_entries": {
+  "calls": 6,
+  "empty": 0,
+  "errors": 0,
+  "result_chars": 73900
+ },
+ "find_examples": {
+  "calls": 10,
+  "empty": 0,
+  "errors": 0,
+  "result_chars": 8699
+ }
+}

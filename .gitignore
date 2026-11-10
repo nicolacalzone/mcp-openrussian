@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.uv-cache/
+
+# Tool caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Dictionary data and build output (large, reproducible, CC BY-SA)
+data/
+*.db
+*.db-*
+*.csv
+*.zip
+*.sha256
+*.part
+*.partial
+raw/
+work/
+tmp/
+
+# Secrets and machine-local config
+.env
+.env.*
+.mcp.json
+.claude/settings.local.json
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Others
+*.pdf
+*.zip
+*.tar.gz
+IMPLEMENTATION_PLAN.md
+
+# A/B eval: keep the kit and the summaries, drop raw answers, judge output,
+# blind copies and keys (bulky, regenerable by following RUN_PROTOCOL.md)
+tests/eval/results/*
+!tests/eval/results/SUMMARY_rerun.md
+!tests/eval/results/run*/
+tests/eval/results/run*/*
+!tests/eval/results/run*/SUMMARY_decoded.md
+!tests/eval/results/run*/tool_stats.json
