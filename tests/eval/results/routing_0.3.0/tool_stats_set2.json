@@ -1,0 +1,32 @@
+{
+ "get_entry": {
+  "calls": 2,
+  "empty": 1,
+  "errors": 0,
+  "result_chars": 2024
+ },
+ "lookup_entries": {
+  "calls": 13,
+  "empty": 1,
+  "errors": 0,
+  "result_chars": 20593
+ },
+ "analyze_text": {
+  "calls": 3,
+  "empty": 0,
+  "errors": 0,
+  "result_chars": 6346
+ },
+ "find_examples": {
+  "calls": 1,
+  "empty": 1,
+  "errors": 0,
+  "result_chars": 137
+ },
+ "search_entries": {
+  "calls": 1,
+  "empty": 0,
+  "errors": 0,
+  "result_chars": 2625
+ }
+}

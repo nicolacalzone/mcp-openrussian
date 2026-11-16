@@ -1,0 +1,21 @@
+# id|expected tool|prompt   (expected tool: the one a good run uses first; "none" = any tool may be used)
+M1|lookup_entries|What does the Russian word «кафэ» mean? Is it spelled correctly?
+M2|lookup_entries|Tell me about the Russian slang word «хайп». Is it in the dictionary?
+M3|lookup_entries|Look up «день» as a verb and tell me what it is.
+M4|lookup_entries|Что такое «столам»? Какое это слово и в какой форме?
+M5|lookup_entries|What does «бежишь» mean and which verb is it from?
+S1|search_entries|Give me the Russian words for these animals: cat, dog, horse, cow, sheep.
+S2|search_entries|Wie sagt man "Schlüssel, Tür, Fenster" auf Russisch?
+S3|search_entries|What is the Russian word for "asdfghjkl"?
+S4|search_entries|How do I say "to get tired" in Russian?
+S5|search_entries|Translate these into Russian: house; apple; river.
+G1|get_entry|Show me the dictionary entry with id 7777777.
+G2|get_entry|Give me the full entry of the verb "мыть", including its conjugation table.
+G3|get_entry|Look up «мой» and show me the full entry for each of its meanings.
+G4|get_entry|What case does «скучать» take with «по»? Show me the full dictionary entry.
+G5|get_entry|Show me the entry for the word «ёж» with its example sentences and all its forms.
+T1|analyze_text|Check the stress marks in this sentence: Я зна́ю, что он живёт в до́ме, и мы хо́дим в шко́лу.
+T2|analyze_text|Is there anything wrong with this sentence? Он звони́т мне ка́ждый день.
+T3|analyze_text|Check this text for errors: Она мне звонила вчера, но я не хотел ей отвечять.
+T4|analyze_text|Which is right in Russian: тво́рог or творо́г? Check with the dictionary.
+T5|lookup_entries|Does the dictionary treat му́ка and мука́ as different words? What does each mean?

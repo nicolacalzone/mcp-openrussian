@@ -127,10 +127,10 @@ directory. All tools are read-only:
 
 | Tool | Use it for |
 | --- | --- |
-| `analyze_text` | Check every Russian word of a text in one call: possible lemmas, grammatical reading of each form, and the words found nowhere in the dictionary (`unknown`). The starting point for correcting a message. |
-| `lookup_entries` | A Russian word in any form. Returns every matching entry and says which grammatical forms the query is. |
-| `search_entries` | Russian words for an English or German meaning, or by Russian spelling. |
-| `get_entry` | One entry in full: inflection tables, translations with government notes, aspect partners, related words, examples. |
+| `analyze_text` | Check every Russian word of a text in one call: possible lemmas, grammatical reading of each form, the words found nowhere in the dictionary (`unknown`), and stress marks that differ from the dictionary (`stress_mismatch`). The starting point for correcting a message. |
+| `lookup_entries` | One Russian word in Cyrillic, in any form (inflected is fine). Returns every matching entry and says which grammatical forms the query is. A miss returns `suggestions` and a hint: not in the dictionary, which does not prove the word is wrong. |
+| `search_entries` | Russian words for an English or German meaning; several meanings can be separated by commas. Returns summaries with `entry_id`. An empty result means no translation matches. |
+| `get_entry` | One entry in full by `entry_id` (taken from another tool's result, never invented): inflection tables, translations with government notes, aspect partners, related words, examples. |
 | `browse_entries` | Word lists by frequency rank, CEFR level and part of speech. |
 | `find_examples` | Tatoeba sentences using a word, or exactly one form of it, optionally up to a CEFR level. |
 

@@ -114,6 +114,14 @@ class Summary(BaseModel):
     matched_translation: str | None = None
 
 
+class SpellingSuggestion(BaseModel):
+    word: str = Field(description="Suggested spelling, stressed")
+    lemma: str | None
+    pos: str | None
+    gloss: str | None
+    cost: float = Field(description="Edit cost; 0.5 is a single common confusion (о/а, и/ы)")
+
+
 class LookupResponse(BaseModel):
     query: str
     found: bool
@@ -123,6 +131,11 @@ class LookupResponse(BaseModel):
         default=None,
         description="Homograph entries dropped because their stress differs from the query",
     )
+    suggestions: list[SpellingSuggestion] | None = Field(
+        default=None,
+        description="Only when nothing matched a Cyrillic query: near spellings, best first",
+    )
+    hint: str | None = Field(default=None, description="Only when nothing matched: what to do next")
     dataset_date: str
 
 
@@ -130,6 +143,7 @@ class SearchResponse(BaseModel):
     query: str
     count: int = Field(ge=0)
     results: list[Summary]
+    hint: str | None = Field(default=None, description="Only when nothing matched: what to try")
     dataset_date: str
 
 
@@ -137,6 +151,7 @@ class EntryResponse(BaseModel):
     found: bool
     entry_id: int = Field(gt=0)
     entry: Entry | None
+    hint: str | None = Field(default=None, description="Only when the id does not exist")
     dataset_date: str
 
 
@@ -151,18 +166,15 @@ class Candidate(BaseModel):
     forms: list[FormMatch]
 
 
-class SpellingSuggestion(BaseModel):
-    word: str = Field(description="Suggested spelling, stressed")
-    lemma: str | None
-    pos: str | None
-    gloss: str | None
-    cost: float = Field(description="Edit cost; 0.5 is a single common confusion (о/а, и/ы)")
-
-
 class WordAnalysis(BaseModel):
     word: str
     count: int
     known: bool
+    stress_match: bool | None = Field(
+        default=None,
+        description="Only when the word carries a stress mark and the dictionary marks it: "
+        "whether the dictionary stresses it the same way",
+    )
     candidates: list[Candidate]
     suggestions: list[SpellingSuggestion] = Field(
         default_factory=list,
@@ -182,6 +194,13 @@ class MixedScriptWord(BaseModel):
     latin_letters: list[LatinLetter]
 
 
+class StressMismatch(BaseModel):
+    word: str = Field(description="The word as written, with its stress mark")
+    dictionary: list[str] = Field(
+        description="How the dictionary stresses the entries this word matches"
+    )
+
+
 class AnalysisResponse(BaseModel):
     token_count: int
     unique_words: int
@@ -189,6 +208,10 @@ class AnalysisResponse(BaseModel):
     mixed_script: list[MixedScriptWord] = Field(
         description="Words that mix Latin and Cyrillic letters; these are certain typos. "
         "They were looked up in their repaired spelling."
+    )
+    stress_mismatch: list[StressMismatch] = Field(
+        description="Words written with a stress mark that differs from the dictionary's. "
+        "Accepted variants (тво́рог) can be listed: the dictionary has one stress per word."
     )
     words: list[WordAnalysis]
     dataset_date: str

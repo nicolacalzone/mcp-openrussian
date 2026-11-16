@@ -19,6 +19,7 @@ from openrussian_mcp.domain.normalization import (
     repair_mixed_script,
     russian_tokens,
     stress,
+    stressed_vowels,
 )
 from openrussian_mcp.domain.spelling import spelling_cost
 from openrussian_mcp.domain.vocabulary import (
@@ -45,6 +46,14 @@ _RELATION_CAP = 10
 _GLOSS_PREFIX = re.compile(r"^(?:to|a|an|the)\s+")
 _PARENTHESES = re.compile(r"\([^)]*\)")
 _ACUTE = "\u0301"
+_CYRILLIC = re.compile(r"[А-Яа-яЁё]")
+_TERM_SEPARATOR = re.compile(r"[,;]")
+MAX_SEARCH_TERMS = 8
+MAX_DICTIONARY_SPELLINGS = 5
+UNKNOWN_WORD_HINT = (
+    "Not in the dictionary (about 90k entries; names, slang and rare words are missing). "
+    "This does not prove the word is wrong. Do not present a guessed entry as dictionary data."
+)
 
 
 def _bounded_text(value: str, *, name: str, maximum: int = 120) -> str:
@@ -84,20 +93,41 @@ def _stress_query(value: str) -> str | None:
     return text if _ACUTE in unicodedata.normalize("NFD", text) else None
 
 
-def _same_stress(query: str, candidate: str) -> bool:
-    folded = unicodedata.normalize("NFC", candidate.strip()).casefold()
-    return folded == query
+def _same_stress(query: str, candidate: str) -> bool | None:
+    """Does the candidate put the stress where the query does?
+
+    None when the candidate carries no stress information (a multi-vowel word without a mark),
+    which is not a mismatch.
+    """
+    theirs = stressed_vowels(candidate.strip())
+    if theirs is None:
+        return None
+    return stressed_vowels(query) == theirs
 
 
-def _entry_has_stress(query: str, entry: dict) -> bool:
-    """Does the entry spell the query, stress included, as its headword or one of its forms?"""
+def _entry_has_stress(query: str, entry: dict) -> bool | None:
+    """Does the entry spell the query, stress included, as its headword or one of its forms?
+
+    True if one spelling agrees, None if none disagrees but some cannot be checked, else False.
+    """
     match = entry.get("match") or {}
     candidates: list[str] = []
     if match.get("headword") and entry.get("stressed"):
         candidates.append(entry["stressed"])
     for form in match.get("forms", []):
         candidates.extend(form["form"].split(" / "))
-    return any(_same_stress(query, candidate) for candidate in candidates)
+    verdicts = [_same_stress(query, candidate) for candidate in candidates]
+    if any(verdict is True for verdict in verdicts):
+        return True
+    return None if any(verdict is None for verdict in verdicts) else False
+
+
+def _dictionary_spellings(entry: dict) -> list[str]:
+    match = entry.get("match") or {}
+    spellings = [entry["stressed"]] if match.get("headword") and entry.get("stressed") else []
+    for form in match.get("forms", []):
+        spellings.extend(form["form"].split(" / "))
+    return spellings
 
 
 def _diversify(rows: list[dict], limit: int) -> list[dict]:
@@ -382,17 +412,49 @@ class DictionaryService:
             # at least one does, drop the homographs stressed differently (му́ка vs мука́).
             for entry in entries:
                 entry["stress_match"] = _entry_has_stress(wanted, entry)
-            if any(entry["stress_match"] for entry in entries):
-                stress_filtered = sum(not entry["stress_match"] for entry in entries)
-                entries = [entry for entry in entries if entry["stress_match"]]
+            if any(entry["stress_match"] is True for entry in entries):
+                stress_filtered = sum(entry["stress_match"] is False for entry in entries)
+                entries = [entry for entry in entries if entry["stress_match"] is not False]
+        suggestions: list[dict] | None = None
+        hint: str | None = None
+        if not entries:
+            suggestions, hint = self._lookup_miss(lemma, part_of_speech, language)
         return {
             "query": lemma,
             "found": bool(entries),
             "count": len(entries),
             "entries": entries,
             "stress_filtered": stress_filtered,
+            "suggestions": suggestions,
+            "hint": hint,
             "dataset_date": self.dataset_date,
         }
+
+    def _lookup_miss(
+        self, lemma: str, part_of_speech: str | None, language: str
+    ) -> tuple[list[dict] | None, str]:
+        """Suggestions and guidance for a lookup that matched nothing."""
+        if not _CYRILLIC.search(lemma):
+            return None, (
+                "No Cyrillic letters in the query. lookup_entries takes a Russian word; for an "
+                "English or German meaning use search_entries."
+            )
+        with self.repository.session() as queries:
+            if part_of_speech:
+                other = queries.matches([lemma], None, limit_per_word=20)[lemma]
+                kinds = sorted(
+                    {row["pos"] for row in queries.summaries(list(other)).values() if row["pos"]}
+                )
+                if kinds:
+                    return None, (
+                        f"No {part_of_speech} entry for this word, but it matches "
+                        f"{', '.join(kinds)} entries. Repeat without part_of_speech."
+                    )
+            suggestions = self._suggestions(queries, lemma, language)
+        hint = UNKNOWN_WORD_HINT
+        if suggestions:
+            hint = "Near spellings are in `suggestions`. " + hint
+        return suggestions or None, hint
 
     def search_entries(
         self,
@@ -405,6 +467,38 @@ class DictionaryService:
         _choice(language, LANGUAGES, "language")
         _choice(part_of_speech, PARTS_OF_SPEECH, "part_of_speech")
         limit = _bounded(limit, 1, 30)
+        terms = [term.strip() for term in _TERM_SEPARATOR.split(query) if term.strip()]
+        terms = list(dict.fromkeys(terms))[:MAX_SEARCH_TERMS]
+        if len(terms) <= 1:
+            term = terms[0] if terms else query
+            results = self._search_one(term, language, part_of_speech, limit)
+        else:
+            # Several meanings separated by commas: a gloss never contains the whole list, so
+            # each term is searched alone and the results are concatenated without duplicates.
+            per_term = max(1, limit // len(terms))
+            results = []
+            seen: set[int] = set()
+            for term in terms:
+                for item in self._search_one(term, language, part_of_speech, per_term):
+                    if item["entry_id"] not in seen and len(results) < limit:
+                        seen.add(item["entry_id"])
+                        results.append(item)
+        return {
+            "query": query,
+            "count": len(results),
+            "results": results,
+            "hint": (
+                None
+                if results
+                else "Nothing matched. Try a single word or a synonym; separate several "
+                "meanings with commas. For a Russian word in any form use lookup_entries."
+            ),
+            "dataset_date": self.dataset_date,
+        }
+
+    def _search_one(
+        self, query: str, language: str | None, part_of_speech: str | None, limit: int
+    ) -> list[dict]:
         found: list[int] = []
         reasons: dict[int, str] = {}
         matched: dict[int, str] = {}
@@ -465,12 +559,7 @@ class DictionaryService:
             summary["match_reason"] = reasons[entry_id]
             summary["matched_translation"] = matched.get(entry_id)
             results.append(summary)
-        return {
-            "query": query,
-            "count": len(results),
-            "results": results,
-            "dataset_date": self.dataset_date,
-        }
+        return results
 
     def get_entry(
         self,
@@ -495,6 +584,12 @@ class DictionaryService:
             "found": entry is not None,
             "entry_id": entry_id,
             "entry": entry,
+            "hint": (
+                None
+                if entry is not None
+                else "No entry has this id. Ids come from the results of lookup_entries, "
+                "search_entries, analyze_text or browse_entries; do not guess one."
+            ),
             "dataset_date": self.dataset_date,
         }
 
@@ -543,6 +638,32 @@ class DictionaryService:
                 )
         return result
 
+    def _stress_verdict(
+        self, wanted: str, matches: dict[int, Match], rows: dict[int, dict]
+    ) -> tuple[bool | None, list[str]]:
+        """Does the dictionary stress the word the way the text does?
+
+        True if any matching entry does, None if none disagrees but some cannot be checked
+        (or the word is unknown), else False together with the dictionary's own spellings.
+        """
+        verdicts: list[bool | None] = []
+        spellings: list[str] = []
+        for entry_id, match in matches.items():
+            row = rows.get(entry_id)
+            if row is None:
+                continue
+            entry = {
+                "stressed": stress(row["accented"]),
+                "match": self._match(match, row["aspect"], row["pos"]),
+            }
+            verdicts.append(_entry_has_stress(wanted, entry))
+            spellings.extend(_dictionary_spellings(entry))
+        if any(verdict is True for verdict in verdicts):
+            return True, []
+        if not verdicts or any(verdict is None for verdict in verdicts):
+            return None, []
+        return False, list(dict.fromkeys(spellings))[:MAX_DICTIONARY_SPELLINGS]
+
     def analyze_text(self, text: str, language: str = "en", max_candidates: int = 4) -> dict:
         text = _bounded_text(text, name="text", maximum=MAX_TEXT_LENGTH)
         _choice(language, DISPLAY_LANGUAGES, "language")
@@ -553,17 +674,35 @@ class DictionaryService:
             raise ValueError(f"text contains more than {MAX_TEXT_TOKENS} Russian words")
         surfaces: dict[str, str] = {}
         counts: dict[str, int] = {}
+        wanted_stress: dict[str, str] = {}
         for token in tokens:
-            key = normalize_lookup(token)
+            marked = _stress_query(token)
+            # A stress mark makes the spelling its own item: «зво́нит» and «звони́т» differ.
+            key = marked if marked is not None else normalize_lookup(token)
             surfaces.setdefault(key, token)
+            if marked is not None:
+                wanted_stress[key] = marked
             counts[key] = counts.get(key, 0) + 1
         with self.repository.session() as queries:
             matches = queries.matches(surfaces.values(), limit_per_word=max_candidates)
-            ids = sorted({entry_id for found in matches.values() for entry_id in found})
+            # The stress check looks at every match, not only the few candidates shown.
+            full_matches = (
+                queries.matches([surfaces[key] for key in wanted_stress], limit_per_word=20)
+                if wanted_stress
+                else {}
+            )
+            ids = sorted(
+                {
+                    entry_id
+                    for found in (*matches.values(), *full_matches.values())
+                    for entry_id in found
+                }
+            )
             rows = queries.summaries(ids)
             translations = queries.translations(ids, LANGUAGES)
         words = []
         unknown = []
+        stress_mismatch = []
         with self.repository.session() as queries:
             suggestions = {
                 surface: self._suggestions(queries, surface, language)
@@ -595,20 +734,28 @@ class DictionaryService:
                 )
             if not candidates:
                 unknown.append(surface)
-            words.append(
-                {
-                    "word": surface,
-                    "count": counts[key],
-                    "known": bool(candidates),
-                    "candidates": candidates,
-                    "suggestions": suggestions.get(surface, []),
-                }
-            )
+            word: dict[str, Any] = {
+                "word": surface,
+                "count": counts[key],
+                "known": bool(candidates),
+                "candidates": candidates,
+                "suggestions": suggestions.get(surface, []),
+            }
+            if key in wanted_stress:
+                verdict, spellings = self._stress_verdict(
+                    wanted_stress[key], full_matches[surface], rows
+                )
+                if verdict is not None:
+                    word["stress_match"] = verdict
+                if verdict is False:
+                    stress_mismatch.append({"word": surface, "dictionary": spellings})
+            words.append(word)
         return {
             "token_count": len(tokens),
             "unique_words": len(words),
             "unknown": unknown,
             "mixed_script": mixed,
+            "stress_mismatch": stress_mismatch,
             "words": words,
             "dataset_date": self.dataset_date,
         }

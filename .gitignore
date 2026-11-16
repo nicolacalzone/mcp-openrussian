@@ -51,6 +51,10 @@ IMPLEMENTATION_PLAN.md
 # blind copies and keys (bulky, regenerable by following RUN_PROTOCOL.md)
 tests/eval/results/*
 !tests/eval/results/SUMMARY_rerun.md
+!tests/eval/results/ROUTING_0.3.0.md
+!tests/eval/results/routing_0.3.0/
+tests/eval/results/routing_0.3.0/*
+!tests/eval/results/routing_0.3.0/tool_stats_set*.json
 !tests/eval/results/run*/
 tests/eval/results/run*/*
 !tests/eval/results/run*/SUMMARY_decoded.md
