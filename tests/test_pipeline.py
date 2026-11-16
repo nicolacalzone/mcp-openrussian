@@ -336,6 +336,16 @@ def test_snapshot_build_query_and_activation(incoming: Path, tmp_path: Path) -> 
             "browse_entries",
             "find_examples",
         }
+        for name, tool in tools.items():
+            description = tool.description or ""
+            others = [other for other in tools if other != name]
+            assert any(other in description for other in others) or "nothing" in description, name
+        for name, parameter in (
+            ("lookup_entries", "lemma"),
+            ("search_entries", "query"),
+            ("get_entry", "entry_id"),
+        ):
+            assert tools[name].input_schema["properties"][parameter].get("description"), parameter
         annotations = tools["analyze_text"].annotations
         assert annotations is not None and annotations.read_only_hint is True
         assert tools["lookup_entries"].output_schema is not None

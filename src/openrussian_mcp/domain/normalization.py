@@ -6,6 +6,7 @@ import unicodedata
 _SPACES = re.compile(r"\s+")
 _APOSTROPHES = str.maketrans({"’": "'", "ʼ": "'", "`": "'", "´": "'"})
 _VOWELS = "аеёиоуыэюяАЕЁИОУЫЭЮЯ"
+_LOWER_VOWELS = _VOWELS.casefold()
 # OpenRussian marks stress with an ASCII apostrophe after the stressed vowel.
 _STRESS = re.compile(f"([{_VOWELS}])'")
 _VARIANT_SEPARATOR = re.compile(r"\s*/+\s*")
@@ -40,6 +41,31 @@ def stress(value: str | None) -> str | None:
     if value is None:
         return None
     return unicodedata.normalize("NFC", _STRESS.sub("\\1\u0301", value))
+
+
+def stressed_vowels(word: str) -> frozenset[int] | None:
+    """Positions, counted in vowels, of the stressed vowels of a word.
+
+    A vowel followed by U+0301 is stressed; without such a mark, ё is; a word with a single
+    vowel is stressed on it. Anything else is not marked and returns None.
+    """
+    text = unicodedata.normalize("NFC", word).casefold()
+    marked: set[int] = set()
+    yo: set[int] = set()
+    count = 0
+    for index, char in enumerate(text):
+        if char not in _LOWER_VOWELS:
+            continue
+        if text[index + 1 : index + 2] == "\u0301":
+            marked.add(count)
+        if char == "ё":
+            yo.add(count)
+        count += 1
+    if marked:
+        return frozenset(marked)
+    if yo:
+        return frozenset(yo)
+    return frozenset({0}) if count == 1 else None
 
 
 def form_keys(form_bare: str, form_type: str) -> list[str]:

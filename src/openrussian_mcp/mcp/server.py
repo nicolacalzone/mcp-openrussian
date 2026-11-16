@@ -40,8 +40,11 @@ Workflows:
   `unknown` (possible misspellings, or names and rare words) and at which grammatical forms each
   word can be. Then call get_entry for the words whose case, gender, aspect or government you need
   to confirm. The dictionary checks words, not syntax: agreement and word order are up to you.
+  If the text carries stress marks, `stress_mismatch` lists words whose stress differs from the
+  dictionary's: report it as "differs from the dictionary", since accepted variants exist.
 - Meaning of a Russian word (any inflected form): lookup_entries.
-- Russian word for an English or German meaning: search_entries with language set.
+- Russian word for an English or German meaning: search_entries with language set. Several
+  meanings can be given separated by commas ("bread, milk, meat").
 - Study: browse_entries for frequency- or level-based word lists; find_examples for real sentences.
 
 Limits to keep in mind (state them briefly when they affect an answer, without narrating
@@ -86,7 +89,15 @@ def create_server(database: Path) -> MCPServer:
 
     @server.tool(annotations=READ_ONLY)
     def analyze_text(
-        text: Annotated[str, Field(min_length=1, max_length=4000)],
+        text: Annotated[
+            str,
+            Field(
+                min_length=1,
+                max_length=4000,
+                description="Russian text to check, a sentence or a short passage (at most 300 "
+                "Russian words). Stress marks (U+0301) are checked if present.",
+            ),
+        ],
         language: DisplayLanguage = "en",
         max_candidates: Annotated[int, Field(ge=1, le=10)] = 4,
     ) -> Annotated[CallToolResult, AnalysisResponse]:
@@ -101,6 +112,11 @@ def create_server(database: Path) -> MCPServer:
         isolation, so wrong agreement (три годов, в пять часа) is not detected. Unknown words get
         `suggestions`: likely intended spellings by edit distance, best first (a wrong first
         letter is not recovered). This checks words only, not agreement or word order.
+        If a word is written with a stress mark, `stress_match` says whether the dictionary
+        stresses it the same way, and words that differ are listed in `stress_mismatch` with the
+        dictionary's stress. "Differs from the dictionary" is not "wrong": accepted variants
+        (тво́рог) are listed too. Use lookup_entries for one word in detail and get_entry for
+        tables.
         """
         return _result(
             AnalysisResponse.model_validate(service.analyze_text(text, language, max_candidates))
@@ -108,23 +124,38 @@ def create_server(database: Path) -> MCPServer:
 
     @server.tool(annotations=READ_ONLY)
     def lookup_entries(
-        lemma: Annotated[str, Field(min_length=1, max_length=120)],
+        lemma: Annotated[
+            str,
+            Field(
+                min_length=1,
+                max_length=120,
+                description="One Russian word in Cyrillic, in any form, as it appears in the "
+                "text (inflected is fine); do not convert it to a dictionary form first. "
+                "Optionally with a stress mark.",
+            ),
+        ],
         part_of_speech: PartOfSpeech | None = None,
-        include_forms: bool = False,
+        include_forms: Annotated[
+            bool, Field(description="Include the full inflection tables of each entry")
+        ] = False,
         example_limit: Annotated[int, Field(ge=0, le=10)] = 0,
         language: DisplayLanguage = "en",
     ) -> Annotated[CallToolResult, LookupResponse]:
-        """Look up a Russian word, either in its dictionary form or any inflected form.
+        """Look up one Russian word written in Cyrillic, in any form.
 
-        Returns every matching entry (homonyms and words whose forms coincide, e.g. "мой" is
-        both the pronoun and the imperative of мыть). Each entry's `match` says whether the
+        Pass it as it appears in the text; inflected is fine. For an English or German meaning
+        use search_entries; for a whole sentence use analyze_text. Returns every matching entry
+        (homonyms and words whose forms coincide, e.g. "мой" is both the pronoun and the
+        imperative of мыть). Each entry's `match` says whether the
         query is its headword and which grammatical forms it is. The entry also has
         translations, grammar (gender, animacy, aspect and aspect partners) and related words.
         Set include_forms for full inflection tables. If the query carries a stress mark
         (му́ка vs мука́), entries spelled that way are returned first with `stress_match`;
         when none matches, every entry has stress_match=false: that stress is not in the
         dictionary. Stress follows OpenRussian, which can differ from other orthoepic
-        references for variable words.
+        references for variable words. If nothing matches, `found` is false and `suggestions`
+        lists near spellings: the word is not in the dictionary, which does not prove it is
+        wrong. Do not answer with a guessed entry.
         """
         return _result(
             LookupResponse.model_validate(
@@ -136,16 +167,28 @@ def create_server(database: Path) -> MCPServer:
 
     @server.tool(annotations=READ_ONLY)
     def search_entries(
-        query: Annotated[str, Field(min_length=1, max_length=120)],
+        query: Annotated[
+            str,
+            Field(
+                min_length=1,
+                max_length=120,
+                description="An English or German word or phrase, e.g. 'to run'. Several "
+                "meanings can be separated by commas ('bread, milk'). A Russian word also works.",
+            ),
+        ],
         language: TranslationLanguage | None = None,
         part_of_speech: PartOfSpeech | None = None,
         limit: Annotated[int, Field(ge=1, le=30)] = 10,
     ) -> Annotated[CallToolResult, SearchResponse]:
-        """Find Russian words by English or German meaning, or by Russian spelling.
+        """Find Russian words for an English or German meaning.
 
-        Translation matches are ranked by how well a sense matches ("run" → бежа́ть before
-        "run away"), then by frequency. `language` restricts matching and display to English
-        or German. Results are summaries; use get_entry for details.
+        Several meanings can be given separated by commas. A Russian spelling also matches,
+        but for a Russian word you already have, lookup_entries is the right tool. Translation
+        matches are ranked by how well a sense matches ("run" → бежа́ть before "run away"),
+        then by frequency. `language` restricts matching and display to English or German.
+        Results are short summaries with `entry_id`; call get_entry for tables and
+        government. An empty result means no translation matches: try a single word or a
+        synonym.
         """
         return _result(
             SearchResponse.model_validate(
@@ -155,16 +198,27 @@ def create_server(database: Path) -> MCPServer:
 
     @server.tool(annotations=READ_ONLY)
     def get_entry(
-        entry_id: Annotated[int, Field(gt=0)],
+        entry_id: Annotated[
+            int,
+            Field(
+                gt=0,
+                description="Entry id from a result of lookup_entries, search_entries, "
+                "analyze_text or browse_entries. Never invent one.",
+            ),
+        ],
         example_limit: Annotated[int, Field(ge=0, le=10)] = 5,
-        include_forms: bool = True,
+        include_forms: Annotated[
+            bool, Field(description="Include the stressed inflection tables")
+        ] = True,
         language: DisplayLanguage = "en",
     ) -> Annotated[CallToolResult, EntryResponse]:
-        """Get one entry in full.
+        """Get one entry in full by `entry_id`.
 
-        Includes stressed inflection tables, translations with government notes and usage,
-        aspect partners, synonyms/antonyms/related words, expressions that contain the word,
-        and Tatoeba example sentences (easiest first).
+        The id comes from a result of lookup_entries, search_entries, analyze_text or
+        browse_entries; never invent one. If you have a word and no id, use lookup_entries.
+        An unknown id returns found=false. Includes stressed inflection tables, translations
+        with government notes and usage, aspect partners, synonyms/antonyms/related words,
+        expressions that contain the word, and Tatoeba example sentences (easiest first).
         """
         return _result(
             EntryResponse.model_validate(
@@ -193,7 +247,8 @@ def create_server(database: Path) -> MCPServer:
         homograph of another part of speech are skipped unless include_ambiguous_rank is
         true. `register` keeps only entries tagged colloquial, archaic or formal (only about
         350 entries carry such a tag). Levels are incomplete and the dictionary has no topic
-        tags: for a themed list (food, family) use search_entries with several English words.
+        tags: for a themed list (food, family) use search_entries with English words separated by
+        commas. For one specific word use lookup_entries.
         """
         return _result(
             BrowseResponse.model_validate(
@@ -213,9 +268,22 @@ def create_server(database: Path) -> MCPServer:
 
     @server.tool(annotations=READ_ONLY)
     def find_examples(
-        word: Annotated[str, Field(min_length=1, max_length=120)],
+        word: Annotated[
+            str,
+            Field(
+                min_length=1,
+                max_length=120,
+                description="A Russian word in Cyrillic, or a short phrase such as 'скучать по'",
+            ),
+        ],
         max_level: Level | None = None,
-        exact_form: bool | None = None,
+        exact_form: Annotated[
+            bool | None,
+            Field(
+                description="True: only sentences with exactly this form. Default: on for "
+                "inflected forms, off for dictionary forms."
+            ),
+        ] = None,
         language: DisplayLanguage = "en",
         limit: Annotated[int, Field(ge=1, le=20)] = 5,
         diverse: bool = True,
@@ -228,7 +296,8 @@ def create_server(database: Path) -> MCPServer:
         A phrase such as «скучать по» finds sentences with those words in that order; a
         dictionary form stands for all its forms. A phrase that is not in the corpus returns
         nothing: then search its main word. By default (`diverse`) the sentences show
-        different forms and different frames instead of near-identical ones.
+        different forms and different frames instead of near-identical ones. For the meaning
+        of the word use lookup_entries.
         """
         return _result(
             ExamplesResponse.model_validate(

@@ -11,6 +11,7 @@ from openrussian_mcp.domain.normalization import (
     mixed_script_words,
     repair_mixed_script,
     russian_tokens,
+    stressed_vowels,
 )
 from openrussian_mcp.pipeline.build import build_database
 from openrussian_mcp.pipeline.publish import activate
@@ -136,10 +137,15 @@ def test_stress_in_query_selects_homograph(homograph_service: DictionaryService)
     flour = homograph_service.lookup_entries(f"мука{ACUTE}")
     assert [e["entry_id"] for e in flour["entries"]] == [2]
 
+    # A one-vowel word is stressed on its vowel, wherever the mark is typed.
+    assert homograph_service.lookup_entries(f"дом{ACUTE}")["entries"][0]["stress_match"] is True
+
     # A stress the dictionary does not have: nothing is dropped, nothing matches.
-    wrong = homograph_service.lookup_entries(f"дом{ACUTE}")
+    wrong = homograph_service.lookup_entries(f"года{ACUTE}")
     assert wrong["entries"][0]["stress_match"] is False
     assert wrong["stress_filtered"] is None
+    right = homograph_service.lookup_entries(f"го{ACUTE}да")
+    assert right["entries"][0]["stress_match"] is True
 
 
 def test_known_export_errors_are_patched(homograph_service: DictionaryService) -> None:
@@ -340,3 +346,143 @@ def test_browse_by_register_and_summary_tags(tmp_path: Path) -> None:
     assert len(service.browse_entries()["results"]) == 3
     with pytest.raises(ValueError):
         service.browse_entries(register="slang")
+
+
+def test_stressed_vowels() -> None:
+    assert stressed_vowels(f"звони{ACUTE}т") == {1}
+    assert stressed_vowels(f"зво{ACUTE}нит") == {0}
+    assert stressed_vowels("зелёный") == {1}  # ё carries the stress
+    assert stressed_vowels("день") == {0}  # one vowel
+    assert stressed_vowels(f"де{ACUTE}нь") == {0}
+    assert stressed_vowels("звонит") is None  # not marked
+    assert stressed_vowels(f"е{ACUTE}то и э{ACUTE}то") == {0, 3}  # two marks
+    assert stressed_vowels(f"Звони{ACUTE}т") == {1}  # case does not matter
+    assert stressed_vowels("й") is None
+
+
+@pytest.fixture
+def stress_service(tmp_path: Path) -> DictionaryService:
+    content: dict[str, list[dict]] = {
+        "words": [
+            _word(1, "звонить", "звони'ть", "verb", "10"),
+            _word(2, "день", "день", "noun", "20"),
+            _word(3, "зелёный", "зелёный", "adjective", "30"),
+            _word(4, "мука", "му'ка", "noun", "40"),
+            _word(5, "мука", "мука'", "noun", "40"),
+            _word(6, "творог", "творо'г", "noun", "50"),
+            _word(7, "дом", "до'м", "noun", "60"),
+        ],
+        "translations": [
+            _tl(1, 1, "en", 1, "to call"),
+            _tl(2, 2, "en", 1, "day"),
+            _tl(3, 3, "en", 1, "green"),
+            _tl(4, 4, "en", 1, "torment"),
+            _tl(5, 5, "en", 1, "flour"),
+            _tl(6, 6, "en", 1, "cottage cheese"),
+            _tl(7, 7, "en", 1, "house"),
+            _tl(8, 7, "en", 2, "home"),
+        ],
+        "words_forms": [
+            _form(1, 1, "ru_verb_presfut_sg3", "звони'т"),
+            _form(2, 3, "ru_adj_m_sg_nom", "зелёный"),
+        ],
+        "nouns": [_noun(2, "m"), _noun(4, "f"), _noun(5, "f"), _noun(6, "m"), _noun(7, "m")],
+        "verbs": [{"word_id": "1", "aspect": "imperfective", "partner": ""}],
+    }
+    return _build(tmp_path, content)
+
+
+def _analyzed(service: DictionaryService, text: str) -> dict:
+    result = service.analyze_text(text)
+    return {w["word"]: w for w in result["words"]} | {"_": result}
+
+
+def test_analyze_text_flags_stress_that_differs(stress_service: DictionaryService) -> None:
+    result = stress_service.analyze_text(f"Он зво{ACUTE}нит. Он звони{ACUTE}т. Он звонит.")
+    words = {w["word"]: w for w in result["words"]}
+    # Three spellings of one word are three items; only the marked ones carry a verdict.
+    assert len(result["words"]) == 4  # Он, зво́нит, звони́т, звонит
+    assert words[f"зво{ACUTE}нит"]["stress_match"] is False
+    assert words[f"звони{ACUTE}т"]["stress_match"] is True
+    assert "stress_match" not in words["звонит"]
+    assert words["звонит"]["known"] is True
+    assert result["stress_mismatch"] == [
+        {"word": f"зво{ACUTE}нит", "dictionary": [f"звони{ACUTE}т"]}
+    ]
+
+
+def test_analyze_text_without_marks_has_no_stress_fields(
+    stress_service: DictionaryService,
+) -> None:
+    result = stress_service.analyze_text("Он звонит день")
+    assert result["stress_mismatch"] == []
+    assert all("stress_match" not in w for w in result["words"])
+
+
+def test_analyze_text_stress_homographs_and_spelling_variants(
+    stress_service: DictionaryService,
+) -> None:
+    result = stress_service.analyze_text(
+        f"му{ACUTE}ка мука{ACUTE} де{ACUTE}нь зеле{ACUTE}ный до{ACUTE}м"
+    )
+    assert result["stress_mismatch"] == []
+    verdicts = {w["word"]: w.get("stress_match") for w in result["words"]}
+    assert all(verdict is True for verdict in verdicts.values())
+    # An accepted variant differs from the one stress the dictionary holds.
+    variant = stress_service.analyze_text(f"тво{ACUTE}рог")
+    assert variant["stress_mismatch"] == [
+        {"word": f"тво{ACUTE}рог", "dictionary": [f"творо{ACUTE}г"]}
+    ]
+
+
+def test_lookup_stress_check_has_no_false_alarms(stress_service: DictionaryService) -> None:
+    assert stress_service.lookup_entries(f"де{ACUTE}нь")["entries"][0]["stress_match"] is True
+    assert stress_service.lookup_entries(f"зеле{ACUTE}ный")["entries"][0]["stress_match"] is True
+    wrong = stress_service.lookup_entries(f"зво{ACUTE}нить")
+    assert wrong["entries"][0]["stress_match"] is False
+
+
+def test_lookup_miss_guides_the_caller(stress_service: DictionaryService) -> None:
+    latin = stress_service.lookup_entries("to run")
+    assert latin["found"] is False
+    assert "search_entries" in latin["hint"]
+    assert latin["suggestions"] is None
+
+    typo = stress_service.lookup_entries("звонють")
+    assert typo["found"] is False
+    assert typo["suggestions"]
+    assert "not in the dictionary" in typo["hint"].lower()
+    assert "guessed entry" in typo["hint"]
+
+    wrong_pos = stress_service.lookup_entries("день", part_of_speech="verb")
+    assert wrong_pos["found"] is False
+    assert "noun" in wrong_pos["hint"] and "part_of_speech" in wrong_pos["hint"]
+
+    hit = stress_service.lookup_entries("день")
+    assert hit["hint"] is None and hit["suggestions"] is None
+
+
+def test_search_and_get_entry_misses_have_hints(stress_service: DictionaryService) -> None:
+    empty = stress_service.search_entries("xylophone")
+    assert empty["count"] == 0
+    assert "synonym" in empty["hint"]
+    assert stress_service.search_entries("day")["hint"] is None
+
+    missing = stress_service.get_entry(999)
+    assert missing["found"] is False
+    assert "do not guess" in missing["hint"]
+    assert stress_service.get_entry(2)["hint"] is None
+
+
+def test_search_entries_splits_comma_separated_meanings(
+    stress_service: DictionaryService,
+) -> None:
+    result = stress_service.search_entries("day, green; flour", language="en", limit=30)
+    assert {r["entry_id"] for r in result["results"]} == {2, 3, 5}
+    assert len(result["results"]) == 3
+    # A single term behaves as before.
+    single = stress_service.search_entries("day", language="en")
+    assert [r["entry_id"] for r in single["results"]] == [2]
+    # A list is never longer than the limit.
+    assert len(stress_service.search_entries("day, green, flour", limit=2)["results"]) <= 2
+    assert stress_service.search_entries("day,")["results"][0]["entry_id"] == 2
