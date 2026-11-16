@@ -73,3 +73,26 @@ the MCP-off agent made no tool calls.
    recomputes totals and reports any total the judge got wrong.
 4. Average over the 3 runs. For a difference to count it should be at least about one
    point on an item group and hold in more than one run.
+
+## 5. Routing and miss-handling check (per release)
+
+The A/B evaluation scores answer quality. This check asks a narrower question: after a change to
+tool names, descriptions or response fields, does a client still pick the right tool and
+report misses correctly? It is a behaviour check of one model and is not scored 0-10.
+
+1. Write prompts as `id|expected tool|prompt` (see `routing/`). Cover: a word in an inflected
+   form, a misspelling, a word that is not in the dictionary, an English or German meaning, a
+   comma-separated list of meanings, an entry id that does not exist, stress-marked text with
+   and without a real error. Aim for 15-20 prompts per set.
+2. Run `tools/run_routing.sh PROMPTS.txt OUT_DIR MCP_CONFIG.json` (Claude Code, Haiku, only
+   the openrussian server, no built-in tools). It writes one transcript per prompt.
+3. `cat OUT_DIR/*.jsonl > all.jsonl && python tests/eval/tools/tool_stats.py all.jsonl` for
+   counts, then read each transcript: the tools called, their arguments, and the final answer.
+4. Pass criteria: no English or German query to `lookup_entries`; no `entry_id` that did not
+   come from the user or a tool result; a miss is reported as "not in the dictionary" and
+   anything not from the dictionary is labelled; no tool errors. Also record prompts answered
+   with no tool call and answers that contradict the tool result.
+5. Record the result as `results/ROUTING_<version>.md`: criteria table, findings, and one line
+   per prompt. Keep only `tool_stats` JSON next to it; transcripts are not kept.
+
+Expect noise: one run per prompt, so a difference of one or two prompts means nothing.

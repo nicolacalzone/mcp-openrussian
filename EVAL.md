@@ -83,6 +83,28 @@ already answer it gives little extra. The price is worth paying for G and probab
 for general language questions. The H result is a tool-usage problem to fix, not a reason to turn
 the MCP off.
 
+## Routing and miss-handling check (0.3.0)
+
+A second, smaller check covers the 0.3.0 changes (descriptions, miss hints, comma search, stress
+check). 38 prompts in two sets, Haiku 5.5 through Claude Code with only this server, one run
+each; details in [tests/eval/results/ROUTING_0.3.0.md](tests/eval/results/ROUTING_0.3.0.md).
+Not scored: it checks which tool is called and whether misses are reported honestly.
+
+| Check | Result |
+|---|---|
+| Non-Russian query sent to `lookup_entries` | 0 of 26 calls |
+| `entry_id` invented by the model | 0 |
+| Tool errors | 0 |
+| Misses reported as "not in the dictionary" | 6 of 7 (one overclaim: «карова» "isn't a Russian word") |
+| Stress mismatches found in marked text | 3 of 3 words with a real difference (зво́нит, на́чала, тво́рог) |
+| Comma-separated meanings | one `search_entries` call returned every term (0 results before 0.3.0) |
+| Prompts answered with no tool call | 7 of 38 (6 of 10 translation prompts) |
+
+Two problems are in the model, not the server. It often skips the dictionary for simple
+translations, and once it called an accepted variant stress («тво́рог») "rejected" although
+`lookup_entries` had returned the entry with `stress_match: false`. The 0.3.0 text does not
+prevent either.
+
 ## Caveats
 
 - This is not a like-for-like comparison with the first evaluation (one run, different model, old

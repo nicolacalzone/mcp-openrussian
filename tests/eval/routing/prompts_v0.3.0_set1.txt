@@ -1,0 +1,19 @@
+# id|expected tool|prompt   (expected tool: the one a good run uses first)
+L1|lookup_entries|What does the word "звонишь" mean, and what is its dictionary form?
+L2|lookup_entries|Is "средства" genitive singular or nominative plural? Which word is it?
+L3|lookup_entries|Look up the Russian word "включит" and tell me its aspect.
+L4|lookup_entries|What does «карова» mean?
+L5|lookup_entries|Tell me about the Russian word "Гаджет" — is it in the dictionary?
+S1|search_entries|How do you say "hedgehog" in Russian?
+S2|search_entries|Give me Russian words for "to run" as a verb.
+S3|search_entries|What is the German word "Brot" in Russian?
+S4|search_entries|I need Russian words for these foods: bread, milk, meat, cheese.
+S5|search_entries|Find a Russian word meaning "xylophone-like instrument made of glass bowls".
+G1|get_entry|Show me the full dictionary entry with id 99999999.
+G2|get_entry|Give me the full inflection table of the Russian word "стол".
+G3|get_entry|Show me the complete entry for the verb "писать", with its government notes.
+G4|get_entry|What does "по" govern? Give me the full entry.
+G5|get_entry|List the aspect partner and full conjugation of "делать".
+T1|analyze_text|Check this sentence for errors, stress marks included: Он зво́нит. Она на́чала работу.
+T2|analyze_text|Is the stress right in: де́нь, зеле́ный, тво́рог?
+T3|lookup_entries|Does звони́т have the stress on the last syllable according to the dictionary?
